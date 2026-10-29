@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.py[cod]
+*cookies*
+*.log
+.env*
+data/
+models/
+transcripts/
+node_modules/
+vendor/codex-runtime/
+local.*
+*.mp4
+*.mp3
+*.wav

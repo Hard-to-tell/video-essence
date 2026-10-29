@@ -1,0 +1,1 @@
+Source: https://github.com/JoeanAmier/TikTokDownloader commit 473c90ff70c663cfb69310fff2b8d5192f200661; unmodified signing modules; see module notices.
