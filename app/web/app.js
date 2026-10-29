@@ -1,4 +1,4 @@
-// 界面逻辑：四个页面（开始 / 进度 / 总结库 / 设置）+ 右侧详情抽屉。
+// 界面逻辑：四个页面（开始 / 进度 / 总结库 / 设置）+ 居中阅读窗口。
 // 只通过 Api 取数据，不直接碰后端细节。
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -11,7 +11,7 @@ const state = {
   settings: null,
   composer: { source: null, limit: 5, autoSkip: true, links: "", files: [] },
   lib: { q: "", platform: "all", verdict: "all" },
-  drawer: { id: null, tab: "summary", data: null, q: "" },
+  drawer: { id: null, tab: "summary", data: null, q: "", layout: "reading", expanded: false, scroll: {} },
 };
 
 // ---------- 文案与小工具 ----------
@@ -62,7 +62,10 @@ function fmtAgo(iso) {
   return `${Math.floor(d / 86400)} 天前`;
 }
 function toast(msg) {
-  const t = $("#toast");
+  const reader = $("#drawer");
+  const t = reader.open
+    ? reader.querySelector(".toast") || reader.appendChild(Object.assign(document.createElement("div"), { className: "toast" }))
+    : $("#toast");
   t.textContent = msg;
   t.hidden = false;
   clearTimeout(toast.timer);
@@ -390,6 +393,12 @@ function bindQueue() {
 
 // 列表里的点击（打开详情、重试、跳转）统一委托
 function bindLive(root) {
+  root.onkeydown = (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches(".sum-card")) {
+      e.preventDefault();
+      openDrawer(e.target.dataset.open);
+    }
+  };
   root.onclick = async (e) => {
     const retry = e.target.closest("[data-retry]");
     if (retry) { e.stopPropagation(); await Api.retry(retry.dataset.retry); toast("已重新排队"); return refreshBatches(); }
@@ -407,7 +416,7 @@ function sumCard(it) {
   const s = it.summary;
   const dim = it.status === "skipped" || s?.verdict === "none";
   const text = it.status === "skipped" ? `跳过：${it.skip_reason || ""}` : s?.one_line || "";
-  return `<article class="card sum-card ${dim ? "dim" : ""}" data-open="${it.id}">
+  return `<article class="card sum-card ${dim ? "dim" : ""}" data-open="${it.id}" tabindex="0" role="button" aria-label="阅读：${esc(it.title)}">
     <div class="top"><span class="plat ${it.platform}">${PLATFORM[it.platform] || ""}</span><span>${esc(it.uploader || "")}</span><span>${fmtDur(it.duration)}</span>
       ${it.status === "skipped" ? pill("skipped") : verdictPill(s?.verdict)}</div>
     <h3>${esc(it.title)}</h3><p>${esc(text)}</p></article>`;
@@ -549,28 +558,38 @@ async function login(platform) {
   } catch (e) { toast(e.message || "登录失败"); }
 }
 
-// ---------- 详情抽屉 ----------
+// ---------- 阅读窗口 ----------
 async function openDrawer(id) {
-  state.drawer = { id, tab: "summary", data: null, q: "" };
+  state.drawer = { id, tab: "summary", data: null, q: "", layout: "reading", expanded: false, scroll: {} };
   const d = $("#drawer");
-  d.innerHTML = `<div class="empty" style="margin-top:30vh"><span class="spinner" style="display:inline-block"></span></div>`;
-  d.classList.add("open");
-  d.setAttribute("aria-hidden", "false");
-  $("#drawer-backdrop").hidden = false;
+  d.classList.remove("expanded");
+  d.innerHTML = `<div class="drawer-head"><div class="row"><h2 id="reader-title">正在打开视频</h2><button class="btn ghost sm close" id="drawer-close" aria-label="关闭阅读">${ICON.x}</button></div></div><div class="empty"><span class="spinner" style="display:inline-block"></span></div>`;
+  $("#drawer-close").onclick = closeDrawer;
+  if (!d.open) d.showModal();
+  document.body.classList.add("reader-open");
   try {
-    state.drawer.data = await Api.item(id);
+    const data = await Api.item(id);
+    if (state.drawer.id !== id || !d.open) return;
+    state.drawer.data = data;
     const st = state.drawer.data.status;
     if (st !== "done") state.drawer.tab = st === "skipped" ? "summary" : "progress";
     renderDrawer();
+    $("#drawer-close").focus();
   } catch (e) {
-    d.innerHTML = `<div class="empty"><b>打不开这条</b>${esc(e.message || "")}</div>`;
+    if (state.drawer.id !== id || !d.open) return;
+    d.querySelector(".empty").innerHTML = `<b>打不开这条</b>${esc(e.message || "")}`;
   }
 }
 function closeDrawer() {
-  $("#drawer").classList.remove("open");
-  $("#drawer").setAttribute("aria-hidden", "true");
-  $("#drawer-backdrop").hidden = true;
   state.drawer.id = null;
+  $("#drawer").close();
+  document.body.classList.remove("reader-open");
+}
+function switchReaderTab(tab) {
+  state.drawer.scroll[state.drawer.tab] = $("#drawer-body").scrollTop;
+  state.drawer.tab = tab;
+  renderDrawer();
+  $(`[data-tab="${tab}"]`).focus();
 }
 function renderDrawer() {
   const it = state.drawer.data;
@@ -579,11 +598,11 @@ function renderDrawer() {
   $("#drawer").innerHTML = `
     <div class="drawer-head">
       <div class="row"><span class="plat ${it.platform}">${PLATFORM[it.platform] || ""}</span>${pill(it.status)}
-        <button class="btn ghost sm close" id="drawer-close" aria-label="关闭">${ICON.x}</button></div>
-      <h2>${esc(it.title)}</h2>
+        <div class="reader-actions"><button class="btn ghost sm" id="reader-expand" aria-pressed="${state.drawer.expanded}">${state.drawer.expanded ? "适合阅读" : "铺满窗口"}</button><button class="btn ghost sm close" id="drawer-close" aria-label="关闭阅读">${ICON.x}</button></div></div>
+      <h2 id="reader-title">${esc(it.title)}</h2>
       <div class="meta">${it.uploader ? `<span>${esc(it.uploader)}</span>` : ""}<span>时长 ${fmtDur(it.duration)}</span>${it.source ? `<span>正文来自${esc(it.source)}</span>` : ""}</div>
     </div>
-    <div class="drawer-tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${state.drawer.tab === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="drawer-tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" aria-pressed="${state.drawer.tab === k}" class="${state.drawer.tab === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <div class="drawer-body" id="drawer-body">${drawerBody(it)}</div>
     <div class="drawer-foot">
       ${it.url ? `<a class="btn" href="${esc(it.url)}" target="_blank" rel="noopener">${ICON.open}打开原视频</a>` : ""}
@@ -593,20 +612,36 @@ function renderDrawer() {
       ${it.status === "running" || it.status === "queued" ? `<button class="btn" id="cancel-one">取消这条</button>` : ""}
     </div>`;
   $("#drawer-close").onclick = closeDrawer;
-  document.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { state.drawer.tab = b.dataset.tab; renderDrawer(); }));
+  $("#reader-expand").onclick = (e) => {
+    state.drawer.expanded = !state.drawer.expanded;
+    $("#drawer").classList.toggle("expanded", state.drawer.expanded);
+    e.currentTarget.textContent = state.drawer.expanded ? "适合阅读" : "铺满窗口";
+    e.currentTarget.setAttribute("aria-pressed", String(state.drawer.expanded));
+  };
+  document.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => switchReaderTab(b.dataset.tab)));
+  $("#drawer-body").scrollTop = state.drawer.scroll[state.drawer.tab] || 0;
   $("#copy-md") && ($("#copy-md").onclick = () => copyText(toMarkdown(it)));
   $("#force-sum") && ($("#force-sum").onclick = async () => { await Api.summarizeAnyway(it.id); toast("已重新排队，这次不会跳过"); closeDrawer(); refreshBatches(); });
   $("#retry-one") && ($("#retry-one").onclick = async () => { await Api.retry(it.id); toast("已重新排队"); closeDrawer(); refreshBatches(); });
   $("#cancel-one") && ($("#cancel-one").onclick = async () => { await Api.cancel(it.id); toast("已取消"); closeDrawer(); refreshBatches(); });
   const q = $("#tx-q");
   if (q) q.oninput = (e) => { state.drawer.q = e.target.value; $("#tx").innerHTML = transcriptLines(it); };
+  document.querySelectorAll("[data-tx-layout]").forEach((b) => (b.onclick = () => {
+    state.drawer.layout = b.dataset.txLayout;
+    document.querySelectorAll("[data-tx-layout]").forEach((button) => {
+      const selected = button === b;
+      button.classList.toggle("on", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    $("#tx").innerHTML = transcriptLines(it);
+  }));
 }
 function drawerBody(it) {
   const tab = state.drawer.tab;
   if (tab === "progress") return progressBody(it);
   if (tab === "transcript") {
     if (!it.transcript?.length) return `<div class="empty"><b>还没有原文</b>拿到字幕或听写完成后会显示在这里</div>`;
-    return `<input class="input tx-search" id="tx-q" placeholder="在原文里搜索" value="${esc(state.drawer.q)}"><div class="tx" id="tx">${transcriptLines(it)}</div>`;
+    return `<div class="tx-toolbar"><input class="input" id="tx-q" aria-label="在原文里搜索" placeholder="在原文里搜索" value="${esc(state.drawer.q)}"><div class="seg" aria-label="原文排版">${[["reading", "连贯阅读"], ["timeline", "时间轴"]].map(([key, label]) => `<button data-tx-layout="${key}" class="${state.drawer.layout === key ? "on" : ""}" aria-pressed="${state.drawer.layout === key}">${label}</button>`).join("")}</div></div><div class="tx" id="tx">${transcriptLines(it)}</div>`;
   }
   if (it.status === "skipped") {
     return `<div class="verdict-box none"><div><div class="v-label">已跳过</div><div class="v-text">${esc(it.skip_reason || "")}</div></div></div>
@@ -624,13 +659,24 @@ function drawerBody(it) {
 }
 function transcriptLines(it) {
   const q = state.drawer.q.trim();
-  const re = q ? new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi") : null;
-  const lines = it.transcript.filter((l) => !re || re.test(l.text));
+  const pattern = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = q ? new RegExp(pattern, "i") : null;
+  const paragraphs = [];
+  for (const line of it.transcript) {
+    const previous = paragraphs[paragraphs.length - 1];
+    const text = String(line.text || "");
+    if (!previous || state.drawer.layout === "timeline" || line.start - previous.start >= 45 || previous.text.length >= 240 || (previous.text.length >= 100 && /[。！？.!?]$/.test(previous.text))) {
+      paragraphs.push({ start: line.start, text });
+    } else {
+      previous.text += " " + text;
+    }
+  }
+  const lines = paragraphs.filter((l) => !re || re.test(l.text));
   if (!lines.length) return `<div class="empty">原文里没有“${esc(q)}”</div>`;
   return lines.map((l) => {
     let text = esc(l.text);
     if (re) text = text.replace(new RegExp(esc(q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), (m) => `<mark>${m}</mark>`);
-    return `<div class="tx-line">${timeLink(it, l.start)}<span>${text}</span></div>`;
+    return `<div class="tx-line">${timeLink(it, l.start)}<p>${text}</p></div>`;
   }).join("");
 }
 function progressBody(it) {
@@ -744,12 +790,11 @@ async function boot() {
   renderSys();
   renderNavBadge();
   $("#nav").onclick = (e) => { const b = e.target.closest("[data-view]"); if (b) go(b.dataset.view); };
-  $("#drawer-backdrop").onclick = closeDrawer;
+  $("#drawer").addEventListener("cancel", (e) => { e.preventDefault(); closeDrawer(); });
   $("#drawer").addEventListener("click", (e) => {
     const t = e.target.closest("[data-tab-go]");
-    if (t) { state.drawer.tab = t.dataset.tabGo; renderDrawer(); }
+    if (t) switchReaderTab(t.dataset.tabGo);
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.drawer.id) closeDrawer(); });
   Api.subscribe(onEvent);
   setInterval(async () => { state.status = await Api.status().catch(() => state.status); renderSys(); }, 5000);
   go(location.hash.slice(1) in VIEWS ? location.hash.slice(1) : "home");
