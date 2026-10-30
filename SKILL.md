@@ -13,7 +13,7 @@ Run `bili.py "URL-or-BV"` for Bilibili, `douyin.py "https://www.douyin.com/video
 
 The last stdout line is a transcript path. Read its adjacent `content.json`, including all segments (read long transcripts in parts). If mode is visual or speech-and-frames, inspect the listed storyboard images before summarizing. Visual sampling is limited to at most 24 frames, not exhaustive viewing. If a transcript clearly conflicts with the video topic, rerun Bilibili with `--force-asr`; do not summarize unrelated captions.
 
-Answer directly in the chat, normally in Chinese. Keep useful conclusions, explanations, examples and limitations proportional to the content. Distinguish the speaker's claims from established evidence. Do not invent value in filler content. Use timestamps when useful. Do not create summary files unless requested; required media/transcript caches stay inside this root.
+Answer directly in the chat, normally in Chinese. Keep useful conclusions, explanations, examples and limitations proportional to the content. Read [app/summary_policy.txt](app/summary_policy.txt) for the content-first editorial rules used by the app. Explain the speaker's claims, reasoning and examples before any caveat. Attribute disputed claims without attaching a rebuttal to every point. Put only material limitations in a short final note; do not turn summarization into unsolicited fact-checking. Do not invent value in filler content. Use timestamps when useful. Do not create summary files unless requested; required media/transcript caches stay inside this root.
 
 ## Watch-later or UI workflow
 
