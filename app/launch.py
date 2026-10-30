@@ -1,4 +1,4 @@
-"""双击入口：复用已有服务，等待真正就绪，再打开Edge独立窗口。"""
+"""双击入口：复用已有服务，等待就绪，再用默认浏览器打开网页。"""
 import json
 import os
 from pathlib import Path
@@ -7,6 +7,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import webbrowser
 
 ROOT=Path(__file__).resolve().parents[1]
 URL='http://127.0.0.1:8765/'
@@ -32,10 +33,8 @@ def main():
             if child.poll() is not None: raise RuntimeError('服务启动失败，详情在项目data/server.err.log')
             if time.monotonic()>deadline: raise RuntimeError('服务30秒内未就绪，详情在项目data/server.err.log')
             time.sleep(.3)
-    candidates=[Path(os.environ.get(k,''))/'Microsoft/Edge/Application/msedge.exe' for k in ('ProgramFiles(x86)','ProgramFiles','LOCALAPPDATA')]
-    edge=next((p for p in candidates if p.is_file()),None)
-    if edge is None: raise RuntimeError('未找到Microsoft Edge，请安装后重试')
-    subprocess.Popen([str(edge),'--app='+URL,'--window-size=1280,860'])
+    if not webbrowser.open(URL, new=2):
+        raise RuntimeError('无法自动打开浏览器，请访问 '+URL)
 
 
 if __name__=='__main__':

@@ -5,6 +5,7 @@ The shared policy in `app/summary_policy.txt` applies to extraction, recursive m
 For prompt edits, run a real model on a full transcript through `summarize`, not just one isolated sentence. Inspect the merged output using these criteria:
 
 - Does it explain the author's thesis, reasoning and concrete examples, rather than list topics?
+- Does the opening overview explain the problem, reasoning and conclusion in a readable paragraph (normally 200–350 Chinese characters for essence), rather than a compressed slogan? Short or simple source material should remain proportional.
 - Are disputed claims attributed to the speaker without becoming advice in the assistant's voice?
 - Are caveats limited to material issues and consolidated into at most two note sentences?
 - Are the speaker's own qualifications preserved, including warnings against reckless action?

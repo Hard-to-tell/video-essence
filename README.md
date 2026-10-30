@@ -2,7 +2,7 @@
 
 B站、抖音和本地视频的内容提炼工具，同时提供本地界面与 Codex skill。输入链接或“帮我总结抖音最近稍后再看的3条视频”，读取正文、分段听写、判断价值，再给出要点和回看片段。
 
-提炼优先还原作者的观点、推导和例子，有争议的判断明确归属作者；必要限定集中放在简短备注，不给每条要点附加审稿式免责声明。界面与 skill 共用 [提炼规则](app/summary_policy.txt)，修改后新任务会重新生成分段摘要；旧总结需重新提炼。提示词回归检查见 [评估标准](references/summary-evaluation.md)。
+提炼优先还原作者的观点、推导和例子，开头提供一段完整总览（默认约200～350字，短视频按信息量缩短）；有争议的判断明确归属作者，必要限定集中放在简短备注。界面与 skill 共用 [提炼规则](app/summary_policy.txt)，修改后新任务会重新生成分段摘要；旧总结需重新提炼。提示词回归检查见 [评估标准](references/summary-evaluation.md)。
 
 在总结库点击视频即可居中阅读精华与原文，也可铺满窗口。原文默认连贯分段，支持切换时间轴、搜索高亮；切换精华与原文时保留各自的阅读位置。
 
@@ -28,7 +28,7 @@ npm install --prefix vendor/codex-runtime @openai/codex@0.165.0
 .\launch.cmd
 ```
 
-`launch.cmd` 用 Edge 独立窗口打开；也可以运行 `.\.venv\Scripts\python.exe app/server.py`，访问本机 8765 端口。CPU 可用但长视频较慢；GPU 需要与 CTranslate2 兼容的 NVIDIA CUDA/cuDNN 环境，失败会降级 CPU，本项目不自动改驱动。
+`launch.cmd` 用系统默认浏览器打开普通网页标签；也可以运行 `.\.venv\Scripts\python.exe app/server.py`，访问本机 8765 端口。CPU 可用但长视频较慢；GPU 需要与 CTranslate2 兼容的 NVIDIA CUDA/cuDNN 环境，失败会降级 CPU，本项目不自动改驱动。
 
 在设置中完成 B站扫码登录，或导入抖音 Netscape 格式 Cookie 文件。也可将自己的文件分别保存为根目录 `cookies.txt` / `douyin-cookies.txt`。Cookie 相当于登录凭证，不要提交 Git、发到聊天或分享给其他人。仓库不包含账号、视频、听写稿或个人总结。
 
