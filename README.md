@@ -40,7 +40,7 @@ git clone https://github.com/Hard-to-tell/video-essence.git "$env:USERPROFILE\.c
 
 在该目录完成上述依赖安装，再开始新聊天。可以说 `$video-essence 总结这个视频：https://www.bilibili.com/video/BV.../`，也支持抖音完整视频链接和本地文件。不要只复制 SKILL.md：它依赖仓库中的处理脚本。若已安装到其他位置，可将整个目录移入 skills 目录后重新建立虚拟环境。
 
-skill 默认直接在聊天里返回总结，不额外生成摘要文件。必要缓存统一放在安装目录的 `transcripts/`；界面任务和总结库在 `data/`。图形界面是可选入口，不是使用 skill 的前提。
+skill 默认直接在聊天里返回总结，不额外生成摘要文件。必要缓存放在安装目录的 `transcripts/`；Windows 界面任务和总结库固定保存在 `%LOCALAPPDATA%/VideoEssence/state.json`，更新或切换安装目录仍使用同一份记录。可用 `VIDEO_ESSENCE_DATA_DIR` 指定数据目录。首次启动会导入当前目录以及同级 `bili-summary`、`video-essence` 的旧 `data/state.json`，保留原文件。图形界面是可选入口，不是使用 skill 的前提。
 
 ## 配置与验证
 

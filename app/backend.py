@@ -16,6 +16,7 @@ import uuid
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from bili_api import BiliClient
+from state_storage import state_path
 from summary_engine import summarize
 from process_utils import stop_process
 from douyin import validate_url as douyin_url
@@ -27,7 +28,7 @@ def now(): return datetime.now(timezone.utc).isoformat()
 
 class Store:
     def __init__(self,path=None):
-        self.path=Path(path or ROOT/'data/state.json'); self.path.parent.mkdir(parents=True,exist_ok=True)
+        self.path=Path(path) if path else state_path(ROOT); self.path.parent.mkdir(parents=True,exist_ok=True)
         self.lock=threading.RLock(); self.tasks=queue.Queue()
         self.douyin_connected=False
         self.state=json.loads(self.path.read_text(encoding='utf-8')) if self.path.exists() else {'settings':DEFAULT,'batches':[]}

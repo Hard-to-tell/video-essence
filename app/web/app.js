@@ -724,10 +724,13 @@ const VIEWS = {
   settings: [viewSettings, bindSettings],
 };
 async function go(view) {
+  if (view === "library") {
+    try { state.library = await Api.library(); }
+    catch { toast("总结库读取失败，请确认本地服务已启动后重试；已保存的记录不会被清空。"); return; }
+  }
+  if (view === "settings") state.settings = await Api.settings().catch(() => state.settings);
   state.view = view;
   document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
-  if (view === "library") state.library = await Api.library().catch(() => []);
-  if (view === "settings") state.settings = await Api.settings().catch(() => state.settings);
   renderView();
   window.scrollTo(0, 0);
 }
@@ -740,6 +743,10 @@ function renderLive() {
   renderNavBadge();
   if (state.view === "home") renderHomeLive();
   if (state.view === "queue") renderQueueList();
+  if (state.view === "library") {
+    state.library = state.batches.flatMap((b) => b.items).filter((i) => ["done", "skipped"].includes(i.status));
+    renderLibGrid();
+  }
 }
 // 进行中的批次排前面，其余按创建时间从新到旧
 function sortBatches(list) {
@@ -779,6 +786,10 @@ function onEvent(ev) {
 }
 
 async function boot() {
+  if (location.protocol === "file:") {
+    $("#view").innerHTML = `<section class="card empty"><h1>请先启动视频提炼工具</h1><p>直接打开网页文件无法读取本机总结库，之前保存的记录并未因此丢失。</p><p>请双击程序目录中的 launch.cmd（旧版为“启动界面.cmd”），等待界面自动打开。</p><a class="btn primary" href="http://127.0.0.1:8765/">已启动？打开总结工具</a></section>`;
+    return;
+  }
   try {
     const t = localStorage.getItem("theme");
     if (t && t !== "auto") document.documentElement.dataset.theme = t;
