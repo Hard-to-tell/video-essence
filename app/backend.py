@@ -19,9 +19,10 @@ from bili_api import BiliClient
 from state_storage import state_path
 from summary_engine import summarize
 from process_utils import stop_process
+from content_filter import metadata as content_metadata, skip_reason as metadata_skip_reason
 from douyin import validate_url as douyin_url
 from runtime_config import PYTHON as PY
-DEFAULT={'summary_style':'essence','auto_skip':True,'skip_rules':{'min_seconds':0,'music':True,'ads':True},
+DEFAULT={'summary_style':'essence','auto_skip':True,'skip_rules':{'min_seconds':0,'music':True,'ads':True,'live_entertainment':True},
          'asr_model':'large-v3-turbo','device':'auto','language':'auto','chunk_minutes':10,'max_parallel':1,
          'output_dir':str(ROOT/'transcripts')}
 def now(): return datetime.now(timezone.utc).isoformat()
@@ -32,8 +33,10 @@ class Store:
         self.lock=threading.RLock(); self.tasks=queue.Queue()
         self.douyin_connected=False
         self.state=json.loads(self.path.read_text(encoding='utf-8')) if self.path.exists() else {'settings':DEFAULT,'batches':[]}
+        self.state['settings'].setdefault('skip_rules',{}).setdefault('live_entertainment',True)
         for batch in self.state['batches']:
             for item in batch['items']:
+                item.setdefault('explicit_request',batch.get('kind') in ('links','files'))
                 if item['status'] in ('queued','running'):
                     item.update(status='failed',error='上次运行中断，请重试；已完成的内容缓存会复用',message='等待重试')
         self.save()
@@ -119,7 +122,7 @@ class Store:
             item={'id':uuid.uuid4().hex,'batch_id':batch['id'],'platform':platform,'url':link,'title':Path(link).name if platform=='local' else link,
                   'uploader':'','duration':0,'cover':None,'added_at':now(),'status':'queued','stage':'meta','progress':0,
                   'chunk':None,'eta_sec':None,'message':'等待处理','source':None,'skip_reason':None,'error':None,'summary':None,'log':[],
-                  'auto_skip':batch['auto_skip'],'settings':copy.deepcopy(self.state['settings'])}
+                  'explicit_request':kind in ('links','files'),'auto_skip':batch['auto_skip'],'settings':copy.deepcopy(self.state['settings'])}
             batch['items'].append(item)
             if platform!='local': item['platform']='douyin' if 'douyin.com' in link else 'bilibili'
         with self.lock:
@@ -135,7 +138,9 @@ class Store:
                 self.update(id,run=item.get('run',0)+1,status='canceled',chunk=None,eta_sec=None,message='已取消')
             elif action in ('retry','summarize'):
                 if item['status'] in ('queued','running'): raise ValueError('任务正在处理，无需重复提交')
-                if action=='summarize': item['auto_skip']=False
+                if action=='summarize':
+                    item['auto_skip']=False
+                    item['explicit_request']=True
                 self.update(id,run=item.get('run',0)+1,status='queued',stage='meta',progress=0,chunk=None,eta_sec=None,error=None,skip_reason=None,summary=None,message='等待重试')
                 self.tasks.put((id,item['run']))
             return {'ok':True}
@@ -158,12 +163,26 @@ class Store:
             self.update(id,status='running',stage='meta',progress=0,message='读取视频信息')
             return copy.deepcopy(item)
 
+    def skip_by_metadata(self,item,run):
+        if item.get('explicit_request') or not item['auto_skip'] or not item['settings'].get('skip_rules',{}).get('live_entertainment',True):
+            return False
+        if not self.current(item['id'],run): return True
+        meta=content_metadata(item,ROOT)
+        reason=metadata_skip_reason(meta)
+        if not self.current(item['id'],run): return True
+        if reason:
+            self.update_run(item['id'],run,title=meta.get('title') or item['title'],duration=meta.get('duration',0),
+                            status='skipped',stage='done',progress=1,skip_reason=reason,message=reason)
+            return True
+        return False
+
     def worker(self):
         while True:
             id,run=self.tasks.get()
             try:
                 item=self.claim(id,run)
                 if item is None: continue
+                if self.skip_by_metadata(item,run): continue
                 settings=item['settings']
                 self.update_run(id,run,stage='content',progress=0,message='获取视频正文')
                 script='douyin.py' if item['platform']=='douyin' else 'bili.py'
@@ -262,7 +281,7 @@ def register(route,ApiError):
         if b.get('summary_style') not in ('essence','detailed','brief') or b.get('language') not in ('auto','zh','en'):
             raise ApiError(400,'摘要风格或语言不正确')
         rules=b.get('skip_rules',{})
-        if not isinstance(rules,dict) or not isinstance(rules.get('min_seconds'),(int,float)) or not 0<=rules['min_seconds']<=86400 or any(not isinstance(rules.get(k),bool) for k in ('music','ads')):
+        if not isinstance(rules,dict) or not isinstance(rules.get('min_seconds'),(int,float)) or not 0<=rules['min_seconds']<=86400 or any(not isinstance(rules.get(k),bool) for k in ('music','ads')) or not isinstance(rules.get('live_entertainment',True),bool):
             raise ApiError(400,'跳过规则无效；最短时长须为0~86400秒')
         if Path(b.get('output_dir','')).resolve()!= (ROOT/'transcripts').resolve(): raise ApiError(400,'缓存统一保存在项目 transcripts 目录')
         with store.lock: store.state['settings']={k:b.get(k,DEFAULT[k]) for k in DEFAULT}; store.save()

@@ -484,6 +484,7 @@ function viewSettings() {
           ${segOpt("summary_style", s.summary_style, [["essence", "只要精华"], ["detailed", "详细要点"], ["brief", "一句话"]])}
           <span class="hint">“只要精华”：没有值得记的内容就直接写“没有精华”，不硬凑。</span></div>
         <div class="toggle-row"><div><div class="t">自动跳过没价值的视频</div><div class="hint">跳过的视频会留在总结库里，写明原因，也可以手动“仍然总结”。</div></div>${sw("auto_skip", s.auto_skip)}</div>
+        <div class="toggle-row"><div><div class="t">批量跳过直播、短娱乐内容</div><div class="d">下载前根据标题和标签判断；指定链接或点“仍然总结”可处理</div></div>${sw("rule_live", r.live_entertainment !== false)}</div>
         <div class="toggle-row"><div><div class="t">跳过没有分析内容的纯音乐（保留有信息的画面演示）</div></div>${sw("rule_music", r.music)}</div>
         <div class="toggle-row"><div><div class="t">跳过以带货、口播广告为主的视频</div></div>${sw("rule_ads", r.ads)}</div>
         <div class="toggle-row"><div><div class="t">跳过短于这个时长的视频</div><div class="hint">单位：秒，填 0 表示不按时长跳过</div></div>
@@ -523,7 +524,7 @@ function bindSettings() {
       max_parallel: Number(segVal("max_parallel")), asr_model: $("#asr_model").value,
       chunk_minutes: Number($("#chunk_minutes").value), output_dir: $("#output_dir").value.trim(),
       auto_skip: $("#auto_skip").checked,
-      skip_rules: { ...(state.settings?.skip_rules || {}), music: $("#rule_music").checked, ads: $("#rule_ads").checked, min_seconds: Number($("#rule_min").value) },
+      skip_rules: { ...(state.settings?.skip_rules || {}), live_entertainment: $("#rule_live").checked, music: $("#rule_music").checked, ads: $("#rule_ads").checked, min_seconds: Number($("#rule_min").value) },
     };
     try { state.settings = await Api.saveSettings(next); toast("设置已保存"); } catch (e) { toast(e.message || "保存失败"); }
   };
